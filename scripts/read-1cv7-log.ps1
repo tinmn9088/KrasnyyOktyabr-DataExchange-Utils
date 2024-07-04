@@ -2,7 +2,7 @@
 .SYNOPSIS
 	Read 1C7 log file
 .DESCRIPTION
-	This PowerShell script reads 1C7 log file and parses specified transaction.
+	This PowerShell script reads 1C7 log file and looks for transactions.
 .PARAMETER Path
     Log file path.
 .PARAMETER ObjectFilters
@@ -16,48 +16,152 @@
 #>
 
 param(
-    [Parameter(Mandatory)]
-    [string]$Path,
+    [string]$Path = "1cv7.mlg",
     [Parameter(Mandatory)]
     [string[]]$ObjectFilters,
     [Parameter(Mandatory)]
     [string[]]$TransactionTypeFilters,
-    [Parameter(Mandatory)]
-    [DateTime]$StartDate,
-    [Parameter(Mandatory)]
-    [TimeSpan]$Duration
+    [DateTime]$StartDate = [DateTime]::Today,
+    [TimeSpan]$Duration = (New-TimeSpan -Days 1)
 )
+
+# ⚙️ Transaction regex
+$TRANSACTION_REGEX = New-Object "Regex" "(?<date>.*?);(?<time>.*?);(?<user>.*?);(.*?);(.*?);(?<type>.*?);(.*?);(.*?);(?<id>.*?);(?<name>.*)"
+
+# ⚙️ Function to process transactions
+function Get-TransactionInfo {
+
+    param(
+        [Parameter(Mandatory)]
+        [string]$Transaction, 
+        [Parameter(Mandatory)]
+        [string[]]$ObjectFilters, 
+        [Parameter(Mandatory)]
+        [string[]]$TransactionTypeFilters
+    )
+
+    $Match = $TRANSACTION_REGEX.Match($Transaction)
+
+    if ($Match.Success) {
+        $Groups = $Match.Groups
+
+        $ObjectId = $Groups["id"].Value
+        $TransactionType = $Groups["type"].Value
+
+        :loop foreach ($ObjectFilter in $ObjectFilters) {
+            if ($ObjectId.StartsWith($ObjectFilter)) {
+                foreach ($TransactionTypeFilter in $TransactionTypeFilters) {
+                    if ($TransactionType -eq $TransactionTypeFilter) {
+                        return $Groups["name"].Value
+                    }
+                }
+            }
+        }
+    }
+
+    return $null
+}
 
 try {
 
-    # Print arguments to user
+    # ⌛ 1/5 Prepare settings
+
+    # Determine full path of the log file
+    $Path = [System.IO.Path]::GetFullPath($Path)
+
+    # Determine prefixes of the searched transaction
+    $TRANSACTION_DATE_FORMAT = "yyyyMMdd;HH:mm:ss;"
+    $StartTransactionPrefix = $StartDate.ToString($TRANSACTION_DATE_FORMAT)
+    $EndTransactionPrefix = ($StartDate + $Duration).ToString($TRANSACTION_DATE_FORMAT)
+
+    # Print settings to user
     Write-Host ("Running with settings: " + (
-        ConvertTo-Json -Compress @{ 
+        ConvertTo-Json @{ 
             Path = $Path; 
-            ObjectFilter = $ObjectFilters; 
+            ObjectFilters = $ObjectFilters; 
             TransactionTypeFilters = $TransactionTypeFilters;
-            StartDate = $StartDate.ToString("yyyyMMdd;HH:mm:ss;");
+            StartDate = $StartDate.ToString();
             Duration = $Duration.ToString();
+            StartTransactionPrefix = $StartTransactionPrefix;
+            EndTransactionPrefix = $EndTransactionPrefix;
         }
     ))
 
-    # Set up encoding
+    # ⌛ 2/5 Open file
     $Encoding = [System.Text.Encoding]::GetEncoding(1251)
+    $Lines = [System.IO.File]::ReadLines($Path, $Encoding)
 
-    $lineNumber = 1
+    # ⌛ 3/5 Look for the first transaction from the specified period
+    $Activity = "Looking for the first transaction within period ('$StartTransactionPrefix' - '$EndTransactionPrefix') in log file '$Path'"
+    $WRITE_PROGRESS_FREQUENCY = 25000
+    $LineNumber = 1
+    
+    foreach ($Line in $Lines) {
 
-    # Read file
-    foreach ($line in [System.IO.File]::ReadLines($Path, $Encoding)) 
-    {
-        Write-Host "\rLines read: $lineNumber" -NoNewline
+        # Print progress
+        if ($LineNumber % $WRITE_PROGRESS_FREQUENCY -eq 0)
+        {
+            $Operation = "$LineNumber : $Line"
+            Write-Progress -Activity $Activity -CurrentOperation $Operation -PercentComplete -1
+        }
 
-        $lineNumber++
+        # Determine if the first transaction from the period is found
+        $AfterStart = $Line.CompareTo($StartTransactionPrefix) -ge 0
+
+        if ($AfterStart) {
+            Write-Host "First transaction of the period: '$Line'"
+            break
+        }
+
+        $LineNumber++
     }
 
-    Write-Host "Finished."
+    # ⌛ 4/5 Read transactions from the period
+
+    # Process the line which has already been read and determined as the begginning of the period
+    $TransactionsFound = 0
+    $TransactionsInPeriod = 1
+    $Result = (Get-TransactionInfo $Line $ObjectFilters $TransactionTypeFilters)
+    if (-not ($null -eq $Result)) {
+        $TransactionsFound++
+    }
+
+    # Store current and previous lines 
+    $PreviosLine = $Line
+
+    foreach ($Line in $Lines) {
+
+        # Determine if transaction is beyond the period
+        $BeforeEnd = $Line.CompareTo($EndTransactionPrefix) -lt 0
+
+        if ($BeforeEnd) {
+            $Result = (Get-TransactionInfo $Line $ObjectFilters $TransactionTypeFilters)
+            if (-not ($null -eq $Result)) {
+                $TransactionsFound++
+            }
+
+            # 📢 Write to ouput
+            Write-Output $Result
+
+            $TransactionsInPeriod++
+        }
+        else {
+            Write-Host "Last transaction of the period: '$PreviosLine'"
+            break
+        }
+
+        $LineNumber++
+
+        $PreviosLine = $Line
+    }
+
+    # ⌛ 5/5 Print stats
+    Write-Host "Transactions in period: $TransactionsInPeriod"
+    Write-Host "Matching transactions: $TransactionsFound"
     exit 0
 }
 catch {
+    # ⚠️ Print error description
     Write-Host "Error in line $($_.InvocationInfo.ScriptLineNumber): $($Error[0])"
 	exit 1
 }
