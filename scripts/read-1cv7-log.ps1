@@ -136,12 +136,13 @@ try {
 
         if ($BeforeEnd) {
             $Result = (Get-TransactionInfo $Line $ObjectFilters $TransactionTypeFilters)
+            
             if (-not ($null -eq $Result)) {
                 $TransactionsFound++
-            }
 
-            # 📢 Write to ouput
-            Write-Output $Result
+                # 📢 Write to ouput
+                Write-Output $Result
+            }
 
             $TransactionsInPeriod++
         }
