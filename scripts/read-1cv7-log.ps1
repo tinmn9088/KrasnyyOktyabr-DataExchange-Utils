@@ -16,7 +16,7 @@
 #>
 
 param(
-    [string]$Path = "1cv7.mlg",
+    [string]$Path = '1cv7.mlg',
     [Parameter(Mandatory)]
     [string[]]$ObjectFilters,
     [Parameter(Mandatory)]
@@ -26,7 +26,7 @@ param(
 )
 
 # ⚙️ Transaction regex
-$TRANSACTION_REGEX = New-Object "Regex" "(?<date>.*?);(?<time>.*?);(?<user>.*?);(.*?);(.*?);(?<type>.*?);(.*?);(.*?);(?<id>.*?);(?<name>.*)"
+$TRANSACTION_REGEX = New-Object 'Regex' '(?<date>.*?);(?<time>.*?);(?<user>.*?);(.*?);(.*?);(?<type>.*?);(.*?);(.*?);(?<id>.*?);(?<name>.*)'
 
 # ⚙️ Function to process transactions
 function Get-TransactionInfo {
@@ -45,14 +45,14 @@ function Get-TransactionInfo {
     if ($Match.Success) {
         $Groups = $Match.Groups
 
-        $ObjectId = $Groups["id"].Value
-        $TransactionType = $Groups["type"].Value
+        $ObjectId = $Groups['id'].Value
+        $TransactionType = $Groups['type'].Value
 
         :loop foreach ($ObjectFilter in $ObjectFilters) {
             if ($ObjectId.StartsWith($ObjectFilter)) {
                 foreach ($TransactionTypeFilter in $TransactionTypeFilters) {
                     if ($TransactionType -eq $TransactionTypeFilter) {
-                        return $Groups["name"].Value
+                        return $Groups['name'].Value
                     }
                 }
             }
@@ -70,12 +70,12 @@ try {
     $Path = [System.IO.Path]::GetFullPath($Path)
 
     # Determine prefixes of the searched transaction
-    $TRANSACTION_DATE_FORMAT = "yyyyMMdd;HH:mm:ss;"
+    $TRANSACTION_DATE_FORMAT = 'yyyyMMdd;HH:mm:ss;'
     $StartTransactionPrefix = $StartDate.ToString($TRANSACTION_DATE_FORMAT)
     $EndTransactionPrefix = ($StartDate + $Duration).ToString($TRANSACTION_DATE_FORMAT)
 
     # Print settings to user
-    Write-Host ("Running with settings: " + (
+    Write-Host ('Running with settings: ' + (
         ConvertTo-Json @{ 
             Path = $Path; 
             ObjectFilters = $ObjectFilters; 
