@@ -26,7 +26,10 @@ param(
 )
 
 # ⚙️ Transaction regex
-$TRANSACTION_REGEX = New-Object 'Regex' '(?<date>.*?);(?<time>.*?);(?<user>.*?);(.*?);(.*?);(?<type>.*?);(.*?);(.*?);(?<id>.*?);(?<name>.*)'
+$TRANSACTION_REGEX = New-Object 'Regex' '(?<date>.*?);(?<time>.*?);(?<user>.*?);(.*?);(.*?);(?<type>.*?);(.*?);(.*?);(?<id>.*?);(?<message>.*)'
+
+# ⚙️ Message regex
+$MESSAGE_REGEX = New-Object 'Regex' '.*\s(?<docNumber>[^\s]+)\s(?<date>\d{2}\.\d{2}\.\d{4})\s(?<time>\d{2}\:\d{2}\:\d{2})'
 
 # ⚙️ Function to process transactions
 function Get-TransactionInfo {
@@ -52,7 +55,16 @@ function Get-TransactionInfo {
             if ($ObjectId.StartsWith($ObjectFilter)) {
                 foreach ($TransactionTypeFilter in $TransactionTypeFilters) {
                     if ($TransactionType -eq $TransactionTypeFilter) {
-                        return $Groups['name'].Value
+                        $Message = $Groups['message'].Value
+                        $MessageMatch = $MESSAGE_REGEX.Match($Message)
+                
+                        if ($MessageMatch.Success) {
+                            $MessageGroups = $MessageMatch.Groups
+                            return $MessageGroups['docNumber'].Value
+                        }
+                        else {
+                            return "[WARN] DocNumber missing"
+                        }
                     }
                 }
             }
