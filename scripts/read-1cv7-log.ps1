@@ -139,7 +139,7 @@ try {
     }
 
     # Store current and previous lines 
-    $PreviosLine = $Line
+    $PreviousLine = $Line
 
     foreach ($Line in $Lines) {
 
@@ -159,13 +159,13 @@ try {
             $TransactionsInPeriod++
         }
         else {
-            Write-Host "Last transaction of the period: '$PreviosLine'"
+            Write-Host "Last transaction of the period: '$PreviousLine'"
             break
         }
 
         $LineNumber++
 
-        $PreviosLine = $Line
+        $PreviousLine = $Line
     }
 
     # ⌛ 5/5 Print stats
